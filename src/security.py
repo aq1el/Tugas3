@@ -11,28 +11,9 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from fastapi import HTTPException
 
 
-ROLE_RANK = {"reader": 1, "writer": 2, "admin": 3}
-
-
 def verify_api_key(provided: Optional[str], expected: Optional[str]) -> None:
     if expected and provided != expected:
         raise HTTPException(status_code=401, detail="invalid api key")
-
-
-def resolve_role(provided: Optional[str], key_roles: Dict[str, str]) -> str:
-    if not key_roles:
-        raise HTTPException(status_code=401, detail="api key not configured")
-    for role, key in key_roles.items():
-        if provided == key:
-            return role
-    raise HTTPException(status_code=401, detail="invalid api key")
-
-
-def require_role(provided: Optional[str], key_roles: Dict[str, str], min_role: str) -> str:
-    role = resolve_role(provided, key_roles)
-    if ROLE_RANK.get(role, 0) < ROLE_RANK.get(min_role, 0):
-        raise HTTPException(status_code=403, detail="insufficient role")
-    return role
 
 
 def sign_body(body: bytes, key: bytes) -> str:

@@ -5,7 +5,7 @@ from typing import Deque, Optional, Tuple
 
 import numpy as np
 
-from .utils.helpers import now_ms
+from .utils import now_ms
 
 try:
     from sklearn.linear_model import LinearRegression

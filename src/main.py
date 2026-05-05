@@ -8,17 +8,16 @@ from typing import Any, Dict, Optional
 from fastapi import FastAPI, Header, HTTPException, Request
 from pydantic import BaseModel
 
-from .nodes.cache_node import CacheCoordinator, CacheNode
-from .communication.message_passing import ClusterClient
-from .utils.config import load_settings
-from .consensus.raft import RaftLikeConsensus
-from .nodes.lock_manager import LockManager
-from .utils.metrics import Metrics
+from .cache import CacheCoordinator, CacheNode
+from .cluster import ClusterClient
+from .config import load_settings
+from .consensus import RaftLikeConsensus
+from .lock import LockManager
+from .metrics import Metrics
 from .ml import LoadPredictor
-from .nodes.queue_node import DistributedQueue
-from .audit import AuditLogger
-from .security import decrypt_json, require_role, verify_signature
-from .utils.helpers import new_id
+from .dist_queue import DistributedQueue
+from .security import decrypt_json, verify_api_key, verify_signature
+from .utils import new_id
 
 settings = load_settings()
 cluster = ClusterClient(settings)
@@ -26,10 +25,9 @@ metrics = Metrics()
 lock_manager = LockManager()
 consensus = RaftLikeConsensus(settings, cluster, lock_manager.apply_entry)
 queue_manager = DistributedQueue(settings, cluster)
-cache_node = CacheNode(settings)
+cache_node = CacheNode(settings.node_id)
 cache_coordinator = CacheCoordinator(settings, cluster) if consensus.is_leader else None
 predictor = LoadPredictor(enabled=settings.ml_enabled)
-audit_logger = AuditLogger(settings.audit_log_path, settings.audit_log_key)
 
 app = FastAPI(title="Tugas 3 - Distributed Systems Simulator")
 
@@ -38,7 +36,6 @@ class LockAcquireRequest(BaseModel):
     resource: str
     owner: str
     ttl_ms: int = 5000
-    mode: str = "exclusive"
 
 
 class LockReleaseRequest(BaseModel):
@@ -55,11 +52,6 @@ class QueueEnqueueRequest(BaseModel):
 class QueueDequeueRequest(BaseModel):
     queue: str
     consumer: str
-
-
-class QueueAckRequest(BaseModel):
-    queue: str
-    receipt_id: str
 
 
 class CacheReadRequest(BaseModel):
@@ -105,14 +97,11 @@ async def start_background_tasks() -> None:
             last_total = total
 
     asyncio.create_task(sampler())
-    await cluster.register_node()
-    await queue_manager.start()
 
 
 @app.on_event("shutdown")
 async def shutdown_cluster() -> None:
     await cluster.close()
-    await queue_manager.close()
 
 
 @app.get("/health")
@@ -129,14 +118,13 @@ async def lock_acquire(
     payload: LockAcquireRequest,
     x_api_key: Optional[str] = Header(None),
 ) -> Dict[str, Any]:
-    role = require_role(x_api_key, settings.api_key_roles, "writer")
+    verify_api_key(x_api_key, settings.api_key)
     command = {
         "id": new_id(),
         "op": "lock.acquire",
         "resource": payload.resource,
         "owner": payload.owner,
         "ttl_ms": payload.ttl_ms,
-        "mode": payload.mode,
     }
     if not consensus.is_leader:
         return await cluster.post_json(
@@ -147,8 +135,6 @@ async def lock_acquire(
     ok, result = await consensus.append_entry(command)
     if not ok:
         raise HTTPException(status_code=409, detail=result)
-    await metrics.increment("lock_acquire_ok")
-    await audit_logger.log("lock.acquire", role, {"resource": payload.resource, "owner": payload.owner})
     return result
 
 
@@ -157,7 +143,7 @@ async def lock_release(
     payload: LockReleaseRequest,
     x_api_key: Optional[str] = Header(None),
 ) -> Dict[str, Any]:
-    role = require_role(x_api_key, settings.api_key_roles, "writer")
+    verify_api_key(x_api_key, settings.api_key)
     command = {
         "id": new_id(),
         "op": "lock.release",
@@ -173,14 +159,12 @@ async def lock_release(
     ok, result = await consensus.append_entry(command)
     if not ok:
         raise HTTPException(status_code=409, detail=result)
-    await metrics.increment("lock_release_ok")
-    await audit_logger.log("lock.release", role, {"resource": payload.resource, "owner": payload.owner})
     return result
 
 
 @app.get("/lock/status")
 async def lock_status(resource: str, x_api_key: Optional[str] = Header(None)) -> Dict[str, Any]:
-    require_role(x_api_key, settings.api_key_roles, "reader")
+    verify_api_key(x_api_key, settings.api_key)
     return await lock_manager.status(resource)
 
 
@@ -189,11 +173,8 @@ async def queue_enqueue(
     payload: QueueEnqueueRequest,
     x_api_key: Optional[str] = Header(None),
 ) -> Dict[str, Any]:
-    role = require_role(x_api_key, settings.api_key_roles, "writer")
-    result = await queue_manager.enqueue(payload.queue, payload.payload, payload.key)
-    await metrics.increment("queue_enqueue_ok")
-    await audit_logger.log("queue.enqueue", role, {"queue": payload.queue})
-    return result
+    verify_api_key(x_api_key, settings.api_key)
+    return await queue_manager.enqueue(payload.queue, payload.payload, payload.key)
 
 
 @app.post("/queue/dequeue")
@@ -201,23 +182,8 @@ async def queue_dequeue(
     payload: QueueDequeueRequest,
     x_api_key: Optional[str] = Header(None),
 ) -> Dict[str, Any]:
-    role = require_role(x_api_key, settings.api_key_roles, "writer")
-    result = await queue_manager.dequeue(payload.queue, payload.consumer)
-    await metrics.increment("queue_dequeue_ok")
-    await audit_logger.log("queue.dequeue", role, {"queue": payload.queue, "consumer": payload.consumer})
-    return result
-
-
-@app.post("/queue/ack")
-async def queue_ack(
-    payload: QueueAckRequest,
-    x_api_key: Optional[str] = Header(None),
-) -> Dict[str, Any]:
-    role = require_role(x_api_key, settings.api_key_roles, "writer")
-    result = await queue_manager.ack(payload.queue, payload.receipt_id)
-    await metrics.increment("queue_ack_ok")
-    await audit_logger.log("queue.ack", role, {"queue": payload.queue, "receipt_id": payload.receipt_id})
-    return result
+    verify_api_key(x_api_key, settings.api_key)
+    return await queue_manager.dequeue(payload.queue, payload.consumer)
 
 
 @app.post("/cache/read")
@@ -225,13 +191,10 @@ async def cache_read(
     payload: CacheReadRequest,
     x_api_key: Optional[str] = Header(None),
 ) -> Dict[str, Any]:
-    require_role(x_api_key, settings.api_key_roles, "reader")
+    verify_api_key(x_api_key, settings.api_key)
     entry = await cache_node.read_local(payload.key)
     if entry:
-        await metrics.increment("cache_hit")
         return {"value": entry.value, "state": entry.state}
-
-    await metrics.increment("cache_miss")
 
     if consensus.is_leader and cache_coordinator:
         response = await cache_coordinator.handle_read(settings.node_id, settings.node_url, payload.key)
@@ -250,7 +213,7 @@ async def cache_write(
     payload: CacheWriteRequest,
     x_api_key: Optional[str] = Header(None),
 ) -> Dict[str, Any]:
-    role = require_role(x_api_key, settings.api_key_roles, "writer")
+    verify_api_key(x_api_key, settings.api_key)
     if consensus.is_leader and cache_coordinator:
         response = await cache_coordinator.handle_write(
             settings.node_id, settings.node_url, payload.key, payload.value
@@ -267,19 +230,18 @@ async def cache_write(
             encrypt=True,
         )
     await cache_node.set_entry(payload.key, payload.value, response.get("state", "M"))
-    await audit_logger.log("cache.write", role, {"key": payload.key})
     return response
 
 
 @app.get("/metrics")
 async def get_metrics(x_api_key: Optional[str] = Header(None)) -> Dict[str, Any]:
-    require_role(x_api_key, settings.api_key_roles, "reader")
+    verify_api_key(x_api_key, settings.api_key)
     return await metrics.snapshot()
 
 
 @app.get("/ml/predict")
 async def ml_predict(x_api_key: Optional[str] = Header(None)) -> Dict[str, Any]:
-    require_role(x_api_key, settings.api_key_roles, "reader")
+    verify_api_key(x_api_key, settings.api_key)
     prediction = predictor.predict(steps=1)
     return {"prediction_rps": prediction, "enabled": settings.ml_enabled}
 
@@ -309,12 +271,6 @@ async def internal_queue_enqueue(request: Request) -> Dict[str, Any]:
 async def internal_queue_dequeue(request: Request) -> Dict[str, Any]:
     payload = await parse_cluster_request(request)
     return await queue_manager._dequeue_local(payload.get("queue"), payload.get("consumer"))
-
-
-@app.post("/internal/queue/ack")
-async def internal_queue_ack(request: Request) -> Dict[str, Any]:
-    payload = await parse_cluster_request(request)
-    return await queue_manager._ack_local(payload.get("queue"), payload.get("receipt_id"))
 
 
 @app.post("/internal/cache/read")

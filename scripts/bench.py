@@ -34,12 +34,7 @@ async def worker(
             try:
                 response = await client.post(
                     f"{url}/lock/acquire",
-                    json={
-                        "resource": f"{prefix}-{i}",
-                        "owner": "bench",
-                        "ttl_ms": 2000,
-                        "mode": "exclusive",
-                    },
+                    json={"resource": f"{prefix}-{i}", "owner": "bench", "ttl_ms": 2000},
                     headers={"X-API-Key": api_key},
                 )
             except httpx.HTTPError as exc:
