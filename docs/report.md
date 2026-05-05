@@ -1,5 +1,9 @@
 # Performance Analysis Report
 
+## Identitas
+- Nama: Muhammad 'Aaqil Saputra
+- NIM: 11231047
+
 ## Setup
 - Nodes: 3 (docker compose)
 - Workload: lock acquire benchmark (`scripts/bench.py`)
@@ -8,26 +12,56 @@
 ## Benchmark Steps
 1. Jalankan cluster: `docker compose up --build`
 2. Jalankan benchmark:
+   - `python scripts/bench.py --url http://localhost:8001 --requests 200 --concurrency 5 --api-key devkey`
+   - `python scripts/bench.py --url http://localhost:8001 --requests 200 --concurrency 10 --api-key devkey`
    - `python scripts/bench.py --url http://localhost:8001 --requests 200 --concurrency 20 --api-key devkey`
+   - `python scripts/bench.py --url http://localhost:8001 --requests 200 --concurrency 50 --api-key devkey`
+   - Single node: `python scripts/bench.py --url http://localhost:8000 --requests 200 --concurrency 20 --api-key devkey`
 3. Catat output dan isi tabel berikut.
 
-## Results (fill in)
+## Results (Distributed)
 | Scenario | Requests | Concurrency | Avg ms | Min ms | Max ms |
 | --- | --- | --- | --- | --- | --- |
-| Lock acquire | 200 | 5 | 81.41 | 54.32 | 178.51 |
-| Lock acquire | 200 | 10 | 145.28 | 50.38 | 354.85 |
-| Lock acquire | 200 | 20 | 384.00| 82.10 | 914.75 |
-| Lock acquire | 200 | 50 | 783.52 | 242.38 | 1188.77 |
+| Lock acquire | 200 | 5 | 79.73 | 40.72 | 112.64 |
+| Lock acquire | 200 | 10 | 169.90 | 73.25 | 287.44 |
+| Lock acquire | 200 | 20 | 315.30 | 143.68 | 509.09 |
+| Lock acquire | 200 | 50 | 900.15 | 353.30 | 1297.92 |
+
+## Single-node Baseline (Concurrency 20)
+| Scenario | Requests | Concurrency | Avg ms | Min ms | Max ms |
+| --- | --- | --- | --- | --- | --- |
+| Lock acquire (single) | 200 | 20 | 258.79 | 4.75 | 1700.08 |
+
+## Throughput Estimate (Approx)
+Throughput dihitung sebagai $\text{concurrency} / (\text{avg ms} / 1000)$ untuk estimasi cepat.
+
+| Scenario | Concurrency | Avg ms | Approx Throughput (req/s) |
+| --- | --- | --- | --- |
+| Distributed | 5 | 79.73 | 62.70 |
+| Distributed | 10 | 169.90 | 58.86 |
+| Distributed | 20 | 315.30 | 63.45 |
+| Distributed | 50 | 900.15 | 55.54 |
+| Single | 20 | 258.79 | 77.28 |
+
+## Visualization
+```mermaid
+xychart-beta
+  title "Avg Latency by Concurrency (Distributed)"
+  x-axis "Concurrency" [5, 10, 20, 50]
+  y-axis "Avg ms" 0 --> 950
+  bar [79.73, 169.90, 315.30, 900.15]
+```
 
 ## Observations
 - Throughput meningkat seiring concurrency sampai bottleneck quorum.
 - Latency meningkat saat leader sibuk menunggu quorum.
-- Kenaikan concurrency 5 -> 50 menaikkan avg latency dari 81.41 ms menjadi 783.52 ms, dan max latency naik sampai 1188.77 ms.
+- Kenaikan concurrency 5 -> 50 menaikkan avg latency dari 79.73 ms menjadi 900.15 ms, dan max latency naik sampai 1297.92 ms.
 - Variasi latensi semakin lebar pada concurrency tinggi, menunjukkan efek antrean dan serialisasi append log.
 
 ## Comparison
 - Single node vs multi node: multi node lebih robust namun ada overhead replikasi.
 - Sistem multi node memberi konsistensi lock, namun ada biaya tambahan untuk quorum sehingga latency lebih besar dibanding single node.
+- Pada concurrency 20, single node lebih cepat (avg 258.79 ms) dibanding multi node (avg 315.30 ms).
 
 ## Optimizations
 - Batched append log
@@ -36,3 +70,10 @@
 
 ## Conclusion
 Benchmark menunjukkan performa baik pada concurrency rendah, namun latency naik signifikan saat concurrency tinggi karena quorum dan serialisasi append log. Sistem multi node memberi konsistensi dan ketahanan, dengan trade-off latency dibanding single node. Hasil ini konsisten dengan karakteristik konsensus berbasis quorum.
+
+## Screenshots
+- ![alt text](image.png)
+![alt text](image-1.png)
+
+## Video Link
+- ga sempet pak, maaf :D
