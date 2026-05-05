@@ -1,0 +1,95 @@
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  node1:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.node
+    ports:
+      - "8001:8000"
+    depends_on:
+      - redis
+    environment:
+      NODE_ID: node1
+      NODE_HOST: 0.0.0.0
+      NODE_PORT: 8000
+      NODE_URL: http://node1:8000
+      PEERS: http://node1:8000,http://node2:8000,http://node3:8000
+      LEADER_ID: node1
+      LEADER_URL: http://node1:8000
+      API_KEY: devkey
+      API_KEYS: admin:devkey,reader:readkey
+      CLUSTER_HMAC_KEY: devhmac
+      ENCRYPTION_KEY: o6bShtNP0D3dYlIuYJzoO3jVXo0b4UR5Iwb5F3m21vk=
+      ML_ENABLED: "1"
+      REDIS_URL: redis://redis:6379/0
+      USE_PEER_REGISTRY: "1"
+      QUEUE_VISIBILITY_TIMEOUT: "30"
+      QUEUE_RECLAIM_INTERVAL: "5"
+      CACHE_MAX_ITEMS: "512"
+      CACHE_POLICY: "LRU"
+      AUDIT_LOG_KEY: dev_audit_key
+      AUDIT_LOG_PATH: /app/logs/audit.log
+
+  node2:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.node
+    ports:
+      - "8002:8000"
+    depends_on:
+      - redis
+    environment:
+      NODE_ID: node2
+      NODE_HOST: 0.0.0.0
+      NODE_PORT: 8000
+      NODE_URL: http://node2:8000
+      PEERS: http://node1:8000,http://node2:8000,http://node3:8000
+      LEADER_ID: node1
+      LEADER_URL: http://node1:8000
+      API_KEY: devkey
+      API_KEYS: admin:devkey,reader:readkey
+      CLUSTER_HMAC_KEY: devhmac
+      ENCRYPTION_KEY: o6bShtNP0D3dYlIuYJzoO3jVXo0b4UR5Iwb5F3m21vk=
+      ML_ENABLED: "1"
+      REDIS_URL: redis://redis:6379/0
+      USE_PEER_REGISTRY: "1"
+      QUEUE_VISIBILITY_TIMEOUT: "30"
+      QUEUE_RECLAIM_INTERVAL: "5"
+      CACHE_MAX_ITEMS: "512"
+      CACHE_POLICY: "LRU"
+      AUDIT_LOG_KEY: dev_audit_key
+      AUDIT_LOG_PATH: /app/logs/audit.log
+
+  node3:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.node
+    ports:
+      - "8003:8000"
+    depends_on:
+      - redis
+    environment:
+      NODE_ID: node3
+      NODE_HOST: 0.0.0.0
+      NODE_PORT: 8000
+      NODE_URL: http://node3:8000
+      PEERS: http://node1:8000,http://node2:8000,http://node3:8000
+      LEADER_ID: node1
+      LEADER_URL: http://node1:8000
+      API_KEY: devkey
+      API_KEYS: admin:devkey,reader:readkey
+      CLUSTER_HMAC_KEY: devhmac
+      ENCRYPTION_KEY: o6bShtNP0D3dYlIuYJzoO3jVXo0b4UR5Iwb5F3m21vk=
+      ML_ENABLED: "1"
+      REDIS_URL: redis://redis:6379/0
+      USE_PEER_REGISTRY: "1"
+      QUEUE_VISIBILITY_TIMEOUT: "30"
+      QUEUE_RECLAIM_INTERVAL: "5"
+      CACHE_MAX_ITEMS: "512"
+      CACHE_POLICY: "LRU"
+      AUDIT_LOG_KEY: dev_audit_key
+      AUDIT_LOG_PATH: /app/logs/audit.log

@@ -1,0 +1,172 @@
+openapi: 3.0.3
+info:
+  title: Distributed Synchronization System
+  version: 1.0.0
+servers:
+  - url: http://localhost:8001
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+  schemas:
+    LockAcquireRequest:
+      type: object
+      properties:
+        resource:
+          type: string
+        owner:
+          type: string
+        ttl_ms:
+          type: integer
+        mode:
+          type: string
+          enum: [shared, exclusive]
+    LockReleaseRequest:
+      type: object
+      properties:
+        resource:
+          type: string
+        owner:
+          type: string
+    QueueEnqueueRequest:
+      type: object
+      properties:
+        queue:
+          type: string
+        payload:
+          type: object
+    QueueDequeueRequest:
+      type: object
+      properties:
+        queue:
+          type: string
+        consumer:
+          type: string
+    QueueAckRequest:
+      type: object
+      properties:
+        queue:
+          type: string
+        receipt_id:
+          type: string
+    CacheReadRequest:
+      type: object
+      properties:
+        key:
+          type: string
+    CacheWriteRequest:
+      type: object
+      properties:
+        key:
+          type: string
+        value:
+          type: object
+security:
+  - ApiKeyAuth: []
+paths:
+  /health:
+    get:
+      security: []
+      responses:
+        "200":
+          description: OK
+  /lock/acquire:
+    post:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LockAcquireRequest'
+      responses:
+        "200":
+          description: OK
+  /lock/release:
+    post:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LockReleaseRequest'
+      responses:
+        "200":
+          description: OK
+  /lock/status:
+    get:
+      parameters:
+        - name: resource
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+  /queue/enqueue:
+    post:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QueueEnqueueRequest'
+      responses:
+        "200":
+          description: OK
+  /queue/dequeue:
+    post:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QueueDequeueRequest'
+      responses:
+        "200":
+          description: OK
+  /queue/ack:
+    post:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QueueAckRequest'
+      responses:
+        "200":
+          description: OK
+  /cache/read:
+    post:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CacheReadRequest'
+      responses:
+        "200":
+          description: OK
+  /cache/write:
+    post:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CacheWriteRequest'
+      responses:
+        "200":
+          description: OK
+  /metrics:
+    get:
+      responses:
+        "200":
+          description: OK
+  /ml/predict:
+    get:
+      responses:
+        "200":
+          description: OK
